@@ -1,0 +1,64 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Your_password123"   
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672" # painel de administração
+
+  estoque:
+    build: ./Estoque.Service
+    ports:
+      - "5001:80"
+    environment:
+      - ConnectionStrings__Default=Server=sqlserver;Database=EstoqueDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True
+      - RabbitMQ__HostName=rabbitmq
+      - Jwt__Secret=super_secret_key
+    depends_on:
+      - sqlserver
+      - rabbitmq
+
+  vendas:
+    build: ./Vendas.Service
+    ports:
+      - "5002:80"
+    environment:
+      - ConnectionStrings__Default=Server=sqlserver;Database=VendasDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True
+      - RabbitMQ__HostName=rabbitmq
+      - EstoqueApi__BaseUrl=http://estoque
+      - Jwt__Secret=super_secret_key
+    depends_on:
+      - sqlserver
+      - rabbitmq
+      - estoque
+
+  auth:
+    build: ./AuthService
+    ports:
+      - "5003:80"
+    environment:
+      - ConnectionStrings__Default=Server=sqlserver;Database=AuthDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True
+      - Jwt__Secret=super_secret_key
+    depends_on:
+      - sqlserver
+
+  gateway:
+    build: ./Gateway
+    ports:
+      - "5000:80"
+    environment:
+      - Routes__Estoque=http://estoque
+      - Routes__Vendas=http://vendas
+      - Routes__Auth=http://auth
+      - Jwt__Secret=super_secret_key
+    depends_on:
+      - vendas
+      - estoque
+      - auth
